@@ -42,6 +42,36 @@ impl Cell {
         usize::from(self.len & LEN_BITS)
     }
 
+    /// The length byte, which also carries the wide character flags.
+    pub(crate) fn raw_len(&self) -> u8 {
+        self.len
+    }
+
+    /// The bytes of the contents.
+    pub(crate) fn raw_contents(&self) -> &[u8] {
+        &self.contents[..self.len()]
+    }
+
+    /// How many bytes of contents a length byte says there are.
+    pub(crate) fn contents_len(len: u8) -> usize {
+        usize::from(len & LEN_BITS)
+    }
+
+    /// The cell with the length byte, contents and attributes
+    /// [`raw_len`](Self::raw_len), [`raw_contents`](Self::raw_contents) and
+    /// [`attrs`](Self::attrs) returned.
+    pub(crate) fn from_raw(
+        len: u8,
+        contents: &[u8],
+        attrs: crate::attrs::Attrs,
+    ) -> Self {
+        let mut cell = Self::new();
+        cell.contents[..contents.len()].copy_from_slice(contents);
+        cell.len = len;
+        cell.attrs = attrs;
+        cell
+    }
+
     pub(crate) fn set(&mut self, c: char, a: crate::attrs::Attrs) {
         self.len = 0;
         self.append_char(0, c);

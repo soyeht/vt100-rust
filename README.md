@@ -1,5 +1,31 @@
 # vt100
 
+> **This is the Soyeht fork of [doy/vt100-rust](https://github.com/doy/vt100-rust),
+> based on version 0.16.2.** Its public API is the same as upstream's 0.16.2.
+> The one change is how the scrollback is held in memory, on the branch
+> `compact-scrollback`.
+>
+> Upstream stores every row of the scrollback as a full-width row of 32-byte
+> cells, whatever the line holds: with 10,000 lines of history, 80 to 200
+> columns and ordinary output that is 27 to 71 MB for one terminal, and a
+> window with many terminals has many of them. Here a row that scrolls out of
+> the screen is packed (`src/packed.rs`): its text, the changes of its
+> attributes and its wrap flag, in one allocation, with the blank end of the
+> line left out. A row is unpacked into full cells only while it is in view:
+> `Grid::set_scrollback` and the scrolling that happens while the view is in
+> the history unpack the rows the view shows, and `visible_rows`, `Screen::cell`
+> and everything else that reads rows go on handing out ordinary rows. The
+> live screen is untouched and keeps full cells. The same 10,000 lines take
+> about 1 MB for one terminal, and scrolling costs about the same CPU.
+>
+> The changes are in `src/packed.rs` (new), `src/grid.rs` (`scrollback` holds
+> packed rows; the rows in view are unpacked next to it; the row that scrolls
+> out of the screen is reused as the blank row that comes in), and small
+> accessors in `src/cell.rs` and `src/row.rs`. `tests/scrollback.rs` compares
+> every row of the history, at every scroll position, with the same output
+> drawn on a screen too tall to scroll. To follow upstream, rebase the
+> branch on the upstream tag you want.
+
 This crate parses a terminal byte stream and provides an in-memory
 representation of the rendered contents.
 

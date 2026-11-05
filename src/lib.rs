@@ -51,6 +51,7 @@ mod attrs;
 mod callbacks;
 mod cell;
 mod grid;
+mod packed;
 mod parser;
 mod perform;
 mod row;

@@ -14,7 +14,12 @@ impl Row {
         }
     }
 
-    fn cols(&self) -> u16 {
+    /// The row with these cells.
+    pub fn from_cells(cells: Vec<crate::Cell>, wrapped: bool) -> Self {
+        Self { cells, wrapped }
+    }
+
+    pub fn cols(&self) -> u16 {
         self.cells
             .len()
             .try_into()
@@ -29,8 +34,12 @@ impl Row {
         self.wrapped = false;
     }
 
-    fn cells(&self) -> impl Iterator<Item = &crate::Cell> {
+    pub fn cells(&self) -> impl Iterator<Item = &crate::Cell> {
         self.cells.iter()
+    }
+
+    pub fn as_slice(&self) -> &[crate::Cell] {
+        &self.cells
     }
 
     pub fn get(&self, col: u16) -> Option<&crate::Cell> {

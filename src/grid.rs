@@ -10,9 +10,11 @@ pub struct Grid {
     scroll_bottom: u16,
     origin_mode: bool,
     saved_origin_mode: bool,
-    scrollback: std::collections::VecDeque<crate::row::Row>,
+    scrollback: std::collections::VecDeque<crate::packed::PackedRow>,
     scrollback_len: usize,
     scrollback_offset: usize,
+    // the rows of the scrollback that are in view, unpacked
+    scrollback_view: Vec<crate::row::Row>,
 }
 
 impl Grid {
@@ -29,6 +31,7 @@ impl Grid {
             scrollback: std::collections::VecDeque::new(),
             scrollback_len,
             scrollback_offset: 0,
+            scrollback_view: vec![],
         }
     }
 
@@ -90,6 +93,7 @@ impl Grid {
         self.row_clamp_top(false);
         self.row_clamp_bottom(false);
         self.col_clamp();
+        self.unpack_scrollback_view();
 
         if self.saved_pos.row > self.size.rows - 1 {
             self.saved_pos.row = self.size.rows - 1;
@@ -124,16 +128,9 @@ impl Grid {
     }
 
     pub fn visible_rows(&self) -> impl Iterator<Item = &crate::row::Row> {
-        let scrollback_len = self.scrollback.len();
         let rows_len = self.rows.len();
-        self.scrollback
+        self.scrollback_view
             .iter()
-            .skip(scrollback_len - self.scrollback_offset)
-            // when scrollback_offset > rows_len (e.g. rows = 3,
-            // scrollback_len = 10, offset = 9) the skip(10 - 9)
-            // will take 9 rows instead of 3. we need to set
-            // the upper bound to rows_len (e.g. 3)
-            .take(rows_len)
             // same for rows_len - scrollback_offset (e.g. 3 - 9).
             // it'll panic with overflow. we have to saturate the subtraction.
             .chain(
@@ -197,6 +194,25 @@ impl Grid {
 
     pub fn set_scrollback(&mut self, rows: usize) {
         self.scrollback_offset = rows.min(self.scrollback.len());
+        self.unpack_scrollback_view();
+    }
+
+    // unpacks the rows of the scrollback that are in view, which are the
+    // ones visible_rows returns before the rows of the screen
+    fn unpack_scrollback_view(&mut self) {
+        let scrollback_len = self.scrollback.len();
+        self.scrollback_view.clear();
+        self.scrollback_view.extend(
+            self.scrollback
+                .iter()
+                .skip(scrollback_len - self.scrollback_offset)
+                // when scrollback_offset > rows_len (e.g. rows = 3,
+                // scrollback_len = 10, offset = 9) the skip(10 - 9)
+                // will take 9 rows instead of 3. we need to set
+                // the upper bound to rows_len (e.g. 3)
+                .take(self.rows.len())
+                .map(crate::packed::PackedRow::unpack),
+        );
     }
 
     pub fn write_contents(&self, contents: &mut String) {
@@ -560,17 +576,22 @@ impl Grid {
 
     pub fn scroll_up(&mut self, count: u16) {
         for _ in 0..(count.min(self.size.rows - self.scroll_top)) {
-            self.rows
-                .insert(usize::from(self.scroll_bottom) + 1, self.new_row());
-            let removed = self.rows.remove(usize::from(self.scroll_top));
-            if self.scrollback_len > 0 && !self.scroll_region_active() {
-                self.scrollback.push_back(removed);
+            let mut removed = self.rows.remove(usize::from(self.scroll_top));
+            let packed = (self.scrollback_len > 0
+                && !self.scroll_region_active())
+            .then(|| crate::packed::PackedRow::pack(&removed));
+            // the row that scrolled out is the blank row that comes in
+            removed.clear(crate::attrs::Attrs::default());
+            self.rows.insert(usize::from(self.scroll_bottom), removed);
+            if let Some(packed) = packed {
+                self.scrollback.push_back(packed);
                 while self.scrollback.len() > self.scrollback_len {
                     self.scrollback.pop_front();
                 }
                 if self.scrollback_offset > 0 {
                     self.scrollback_offset =
                         self.scrollback.len().min(self.scrollback_offset + 1);
+                    self.unpack_scrollback_view();
                 }
             }
         }

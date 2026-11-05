@@ -1,5 +1,13 @@
 # Changelog
 
+## Soyeht fork, on 0.16.2
+
+### Changed
+
+* The scrollback holds its rows packed (text, attribute changes and wrap flag
+  in one allocation, without the blank end of the line) and unpacks the rows
+  that are in view. No change to the public API or to what any method returns.
+
 ## [0.16.2] - 2025-07-11
 
 ### Fixed
