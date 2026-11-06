@@ -586,17 +586,51 @@ impl Grid {
             removed.clear(crate::attrs::Attrs::default());
             self.rows.insert(usize::from(self.scroll_bottom), removed);
             if let Some(packed) = packed {
-                self.scrollback.push_back(packed);
-                while self.scrollback.len() > self.scrollback_len {
-                    self.scrollback.pop_front();
-                }
-                if self.scrollback_offset > 0 {
-                    self.scrollback_offset =
-                        self.scrollback.len().min(self.scrollback_offset + 1);
-                    self.unpack_scrollback_view();
-                }
+                self.push_scrollback(packed);
             }
         }
+    }
+
+    fn push_scrollback(&mut self, packed: crate::packed::PackedRow) {
+        // where the rows in view start, in the rows of the scrollback
+        let start = self.scrollback.len() - self.scrollback_offset;
+        self.scrollback.push_back(packed);
+        let mut evicted = 0;
+        while self.scrollback.len() > self.scrollback_len {
+            self.scrollback.pop_front();
+            evicted += 1;
+        }
+        if self.scrollback_offset > 0 {
+            self.scrollback_offset =
+                self.scrollback.len().min(self.scrollback_offset + 1);
+            self.advance_scrollback_view(start, evicted);
+        }
+    }
+
+    // brings the rows in view up to date after a row was pushed onto the
+    // scrollback, and `evicted` rows were dropped from its front, without
+    // unpacking the rows that were already in view. `start` is where the
+    // rows in view started before the push. They start at the same row (which
+    // is `evicted` rows closer to the front now) and the new row comes in at
+    // the end of them while they are fewer than the rows of the screen. When
+    // the view is at the oldest row and that row was dropped, the first row
+    // in view goes with it.
+    fn advance_scrollback_view(&mut self, start: usize, evicted: usize) {
+        let gone = evicted
+            .saturating_sub(start)
+            .min(self.scrollback_view.len());
+        self.scrollback_view.drain(..gone);
+        let start = self.scrollback.len() - self.scrollback_offset;
+        let wanted = self.scrollback_offset.min(self.rows.len());
+        self.scrollback_view.truncate(wanted);
+        let missing = wanted - self.scrollback_view.len();
+        self.scrollback_view.extend(
+            self.scrollback
+                .iter()
+                .skip(start + self.scrollback_view.len())
+                .take(missing)
+                .map(crate::packed::PackedRow::unpack),
+        );
     }
 
     pub fn scroll_down(&mut self, count: u16) {

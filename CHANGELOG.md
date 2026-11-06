@@ -2,8 +2,23 @@
 
 ## Soyeht fork, on 0.16.2
 
+### Fixed
+
+Terminal output is untrusted, and these panicked the parser:
+
+* A character wider than the screen (a wide character on a screen of one
+  column) is ignored instead of panicking.
+* A line that wraps on a screen of one row scrolls it instead of panicking.
+* A resize that cuts a wide character in two clears the half that is left, so
+  that the next write, `ECH`, `EL` or `DCH` on that row does not panic.
+* A size of zero rows or zero columns is taken as one.
+* `ICH` with a count beyond the row (`CSI 65535 @`) inserts what fits. It
+  took seconds.
+
 ### Changed
 
+* Output that scrolls the screen while the view is in the history updates the
+  rows in view instead of unpacking all of them again for each line.
 * The scrollback holds its rows packed (text, attribute changes and wrap flag
   in one allocation, without the blank end of the line) and unpacks the rows
   that are in view. No change to the public API or to what any method returns.
