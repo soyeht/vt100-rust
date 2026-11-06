@@ -2,8 +2,9 @@
 
 > **This is the Soyeht fork of [doy/vt100-rust](https://github.com/doy/vt100-rust),
 > based on version 0.16.2.** Its public API is the same as upstream's 0.16.2.
-> The one change is how the scrollback is held in memory, on the branch
-> `compact-scrollback`.
+> Two things change, on the branch `panic-fixes` (the first alone is the
+> branch `compact-scrollback`): how the scrollback is held in memory, and the
+> panics the parser had on untrusted output.
 >
 > Upstream stores every row of the scrollback as a full-width row of 32-byte
 > cells, whatever the line holds: with 10,000 lines of history, 80 to 200
@@ -23,8 +24,19 @@
 > out of the screen is reused as the blank row that comes in), and small
 > accessors in `src/cell.rs` and `src/row.rs`. `tests/scrollback.rs` compares
 > every row of the history, at every scroll position, with the same output
-> drawn on a screen too tall to scroll. To follow upstream, rebase the
-> branch on the upstream tag you want.
+> drawn on a screen too tall to scroll. While the view is in the history, a
+> row that scrolls out updates the rows in view without unpacking them again
+> (`tests/scrollback_view.rs`).
+>
+> Terminal output is untrusted, and 0.16.2 panics on a line that wraps on a
+> screen of one row, a character wider than the screen, a resize that cuts a
+> wide character in two, and a size of zero; these are fixed in `src/grid.rs`,
+> `src/row.rs` and `src/screen.rs`. `tests/panic_fuzz.rs` is a seeded fuzzer
+> that reads the screen back after each operation and reduces a failing seed
+> to a short list of operations (`cargo test --test panic_fuzz`, and a longer
+> run with `--ignored`, see the top of the file).
+>
+> To follow upstream, rebase the branch on the upstream tag you want.
 
 This crate parses a terminal byte stream and provides an in-memory
 representation of the rendered contents.
