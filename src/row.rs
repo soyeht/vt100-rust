@@ -80,8 +80,14 @@ impl Row {
     }
 
     pub fn resize(&mut self, len: u16, cell: crate::Cell) {
-        self.cells.resize(usize::from(len), cell);
-        self.wrapped = false;
+        if usize::from(len) < self.cells.len() {
+            // truncating takes care of a wide character whose second half
+            // is cut off
+            self.truncate(len);
+        } else {
+            self.cells.resize(usize::from(len), cell);
+            self.wrapped = false;
+        }
     }
 
     pub fn wrap(&mut self, wrap: bool) {

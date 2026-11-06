@@ -69,6 +69,7 @@ impl Screen {
         size: crate::grid::Size,
         scrollback_len: usize,
     ) -> Self {
+        let size = Self::at_least_one(size);
         let mut grid = crate::grid::Grid::new(size, scrollback_len);
         grid.allocate_rows();
         Self {
@@ -84,11 +85,22 @@ impl Screen {
         }
     }
 
+    // a terminal of no rows or no columns has nowhere to put the cursor, so
+    // a size of zero is taken as one
+    fn at_least_one(size: crate::grid::Size) -> crate::grid::Size {
+        crate::grid::Size {
+            rows: size.rows.max(1),
+            cols: size.cols.max(1),
+        }
+    }
+
     /// Resizes the terminal.
+    ///
+    /// A size of zero rows or zero columns is taken as one.
     pub fn set_size(&mut self, rows: u16, cols: u16) {
-        self.grid.set_size(crate::grid::Size { rows, cols });
-        self.alternate_grid
-            .set_size(crate::grid::Size { rows, cols });
+        let size = Self::at_least_one(crate::grid::Size { rows, cols });
+        self.grid.set_size(size);
+        self.alternate_grid.set_size(size);
     }
 
     /// Returns the current size of the terminal.
@@ -717,6 +729,12 @@ impl Screen {
             .try_into()
             // width() can only return 0, 1, or 2
             .unwrap();
+
+        // a character wider than the screen can't be drawn, so it is
+        // ignored (a screen of one column can't hold a wide character)
+        if width > size.cols {
+            return;
+        }
 
         // it doesn't make any sense to wrap if the last column in a row
         // didn't already have contents. don't try to handle the case where a

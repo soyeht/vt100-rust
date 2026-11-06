@@ -526,7 +526,9 @@ impl Grid {
                 .unwrap()
                 .is_wide_continuation();
         let row = self.current_row_mut();
-        for _ in 0..count {
+        // the cells pushed past the last column are dropped, so more than
+        // the columns that are left would only move them again
+        for _ in 0..count.min(size.cols.saturating_sub(pos.col)) {
             if wide {
                 row.get_mut(pos.col).unwrap().set_wide_continuation(false);
             }
@@ -697,18 +699,24 @@ impl Grid {
     }
 
     pub fn col_wrap(&mut self, width: u16, wrap: bool) {
-        if self.pos.col > self.size.cols - width {
-            let mut prev_pos = self.pos;
-            self.pos.col = 0;
-            let scrolled = self.row_inc_scroll(1);
-            prev_pos.row -= scrolled;
-            let new_pos = self.pos;
-            self.drawing_row_mut(prev_pos.row)
-                // we assume self.pos.row is always valid, and so prev_pos.row
-                // must be valid because it is always less than or equal to
-                // self.pos.row
-                .unwrap()
-                .wrap(wrap && prev_pos.row + 1 == new_pos.row);
+        if self.pos.col <= self.size.cols.saturating_sub(width) {
+            // we haven't reached the end of the row yet
+            return;
+        }
+
+        let mut prev_pos = self.pos;
+        self.pos.col = 0;
+        let scrolled = self.row_inc_scroll(1);
+        let Some(prev_row) = prev_pos.row.checked_sub(scrolled) else {
+            // the cursor was on the first row and the row scrolled off the
+            // screen, which only happens when the screen has one row. there
+            // is no row for the cursor to have wrapped from.
+            return;
+        };
+        prev_pos.row = prev_row;
+        let new_pos = self.pos;
+        if let Some(row) = self.drawing_row_mut(prev_pos.row) {
+            row.wrap(wrap && prev_pos.row + 1 == new_pos.row);
         }
     }
 
