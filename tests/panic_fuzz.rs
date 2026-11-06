@@ -10,7 +10,9 @@
 //!
 //! `cargo test --test panic_fuzz` runs a few seconds' worth of seeds.
 //! `VT100_FUZZ_SEEDS=200000 cargo test --release --test panic_fuzz -- --ignored`
-//! runs a longer one; `VT100_FUZZ_FIRST_SEED` moves its start.
+//! runs a longer one; `VT100_FUZZ_FIRST_SEED` moves its start, and
+//! `VT100_FUZZ_TINY=1` limits every screen to 4 rows and 5 columns.
+//! `VT100_FUZZ_REPORT=1` lists every distinct panic instead of failing.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -190,8 +192,12 @@ fn gen_case(seed: u64) -> Case {
     // a size of zero is not a size, but a caller that takes it from a window
     // that is being closed can hand it over
     let low = if rng.below(25) == 0 { 0 } else { 1 };
-    let rows = rng.range(low, 24) as u16;
-    let cols = rng.range(low, 40) as u16;
+    // VT100_FUZZ_TINY puts every screen between 1x1 and 4x5, where a wide
+    // character, a wrap or a resize reaches an edge at almost every byte
+    let tiny = std::env::var("VT100_FUZZ_TINY").is_ok();
+    let (max_rows, max_cols) = if tiny { (4, 5) } else { (24, 40) };
+    let rows = rng.range(low, max_rows) as u16;
+    let cols = rng.range(low, max_cols) as u16;
     let history = *rng.pick(&[0usize, 1, 2, 5, 10, 50, 200]);
     let n_ops = rng.range(3, 40);
     let mut ops = vec![];
@@ -200,8 +206,8 @@ fn gen_case(seed: u64) -> Case {
             0 => {
                 let low = if rng.below(25) == 0 { 0 } else { 1 };
                 ops.push(Op::SetSize(
-                    rng.range(low, 30) as u16,
-                    rng.range(low, 40) as u16,
+                    rng.range(low, max_rows + 6) as u16,
+                    rng.range(low, max_cols) as u16,
                 ));
             }
             1 | 2 => ops.push(Op::SetScrollback(rng.below(260) as usize)),
